@@ -78,6 +78,7 @@ func SaveToTemp(list []*HuomaoItem) string {
 	content := "[playlist]\n"
 	content += fmt.Sprintf("NumberOfEntries=%d\n", len(list))
 	for idx, v := range list {
+		fmt.Println(v)
 		content += fmt.Sprintf("File%d=%s\n", idx+1, v.FlvAddress)
 		content += fmt.Sprintf("Title%d=%s(%d)\n", idx+1, v.Name, v.Online)
 	}
@@ -86,7 +87,6 @@ func SaveToTemp(list []*HuomaoItem) string {
 		Err(ConfigErrStr)
 	}
 	files, _ := filepath.Glob(filepath.Join(temp, OldFilesPattern))
-	fmt.Println(len(files))
 	for _, v := range files {
 		os.Remove(v)
 	}
