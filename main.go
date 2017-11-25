@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"github.com/bitly/go-simplejson"
 	"io/ioutil"
@@ -8,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"time"
@@ -74,7 +76,7 @@ func M3u8ToFlv(m3u8 string) string {
 	return fmt.Sprintf(FlvTemplate, i)
 }
 
-func SaveToTemp(list []*HuomaoItem) string {
+func MakePlist(list []*HuomaoItem) string {
 	content := "[playlist]\n"
 	content += fmt.Sprintf("NumberOfEntries=%d\n", len(list))
 	for idx, v := range list {
@@ -82,6 +84,11 @@ func SaveToTemp(list []*HuomaoItem) string {
 		content += fmt.Sprintf("File%d=%s\n", idx+1, v.FlvAddress)
 		content += fmt.Sprintf("Title%d=%s(%d)\n", idx+1, v.Name, v.Online)
 	}
+	return content
+}
+
+func SaveToTemp(list []*HuomaoItem) string {
+	content := MakePlist(list)
 	temp := os.Getenv("TEMP")
 	if temp == "" {
 		Err(ConfigErrStr)
@@ -103,6 +110,27 @@ func SaveToTemp(list []*HuomaoItem) string {
 	return filename
 }
 
+func SaveToTarget(list []*HuomaoItem, path string) bool {
+	content := MakePlist(list)
+	file, err := os.OpenFile(filepath.Join(path, "huomao.pls"), os.O_RDWR|os.O_TRUNC, 0644)
+	if os.IsNotExist(err) {
+		file, err = os.OpenFile(filepath.Join(path, "huomao.pls"), os.O_CREATE|os.O_TRUNC, 0644)
+		if err != nil {
+			fmt.Println(err)
+			Err(ConfigErrStr)
+		}
+	}
+	if err != nil {
+		fmt.Println(err)
+		Err(ConfigErrStr)
+	}
+	buf := []byte(content)
+	n, err := file.Write(buf)
+	if n != len(buf) || err != nil {
+		Err(ConfigErrStr)
+	}
+	return true
+}
 func Err(err string) {
 	fmt.Println(err)
 	time.Sleep(time.Millisecond * 1500)
@@ -123,11 +151,23 @@ func main() {
 	data, err := ioutil.ReadAll(rsp.Body)
 	defer rsp.Body.Close()
 	DataErr(err)
+	output := flag.String("o", "", " 设置生成PLS文件的地址")
+	flag.Parse()
 	list := DecodeHuomao(data)
-	filname := SaveToTemp(list)
-	command := exec.Command("cmd", "/C", "start", filname)
-	err = command.Start()
-	if err != nil {
-		Err(ConfigErrStr)
+	if *output == "" {
+		filname := SaveToTemp(list)
+		var command *exec.Cmd
+		if runtime.GOOS == "darwin" {
+			command = exec.Command("open", filname)
+		} else {
+			command = exec.Command("cmd", "/C", "start", filname)
+		}
+
+		err = command.Start()
+		if err != nil {
+			Err(ConfigErrStr)
+		}
+	} else {
+		SaveToTarget(list, *output)
 	}
 }
